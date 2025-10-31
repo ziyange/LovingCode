@@ -224,160 +224,94 @@ function scatterHeartBubbles() {
     const toScatter = Array.from(document.querySelectorAll('#container .bubble'));
     console.log("需要分散的气泡数量:", toScatter.length);
     
-    // 创建一个与消息气泡绘制的心形轮廓一致的实体爱心图形
-    const canvas = document.createElement('canvas');
-    const scale = Math.min(window.innerWidth, window.innerHeight) / 60;
-    const canvasSize = scale * 16; // 与消息气泡心形大小一致
-    
-    canvas.width = canvasSize * 2;
-    canvas.height = canvasSize * 2;
-    canvas.style.position = 'absolute';
-    canvas.style.left = '50%';
-    canvas.style.top = '50%';
-    canvas.style.transform = 'translate(-50%, -50%)';
-    canvas.style.zIndex = '9999';
-    
-    const ctx = canvas.getContext('2d');
-    
-    // 绘制实体心形
-    ctx.beginPath();
-    
-    // 绘制心形轮廓，使用与消息气泡相同的比例
-    for (let i = 0; i <= 100; i++) {
-        const t = (i / 100) * 2 * Math.PI;
-        const x = 16 * Math.pow(Math.sin(t), 3);
-        const y = -(13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t));
-        
-        // 缩放并移动到画布中心，使用与消息气泡相同的scale
-        const px = canvas.width/2 + x * scale;
-        const py = canvas.height/2 + y * scale;
-        
-        if (i === 0) {
-            ctx.moveTo(px, py);
-        } else {
-            ctx.lineTo(px, py);
-        }
-    }
-    
-    ctx.closePath();
-    ctx.fillStyle = 'lightpink';
-    ctx.fill();
-    
-    document.getElementById('container').appendChild(canvas);
-    
-    // 先进行心形两次跳动（放大->缩小），总时长约800ms（减少等待时间）
-    const heartbeatDuration = 400; // 从800减少到400
+    // 修改心跳逻辑：只执行一次跳动，在跳动到最大点时直接开始散布
+    const heartbeatDuration = 400;
     toScatter.forEach(el => {
-        el.animate([
+        // 创建只跳动一次的动画，在达到最大点时触发散布
+        const animation = el.animate([
             { transform: el.style.transform + ' scale(1)', offset: 0 },
-            { transform: el.style.transform + ' scale(1.12)', offset: 0.5 },
-            { transform: el.style.transform + ' scale(1)', offset: 1 }
-        ], { duration: heartbeatDuration, easing: 'ease-in-out', iterations: 2 });
-    });
-    
-    // 爱心也一起跳动
-    canvas.animate([
-        { transform: 'translate(-50%, -50%) scale(1)', offset: 0 },
-        { transform: 'translate(-50%, -50%) scale(1.12)', offset: 0.5 },
-        { transform: 'translate(-50%, -50%) scale(1)', offset: 1 }
-    ], { duration: heartbeatDuration, easing: 'ease-in-out', iterations: 2 });
-
-    // 跳动结束后，所有气泡先散布到全屏，然后围绕中心爱心旋转
-    setTimeout(() => {
-        // 先散布到全屏
-        toScatter.forEach((bubble, index) => {
+            { transform: el.style.transform + ' scale(1.12)', offset: 1 } // 只到最大点
+        ], { duration: heartbeatDuration, easing: 'ease-in-out' });
+        
+        // 在动画结束时触发散布
+        animation.onfinish = () => {
             // 随机位置
             const newX = Math.random() * (window.innerWidth - 200);
             const newY = Math.random() * (window.innerHeight - 80);
             
             // 添加过渡动画
-            bubble.style.transition = 'all 0.8s ease-out';
-            bubble.style.left = `${newX}px`;
-            bubble.style.top = `${newY}px`;
-            bubble.style.transform = 'translate(-50%, -50%)'; // 保持居中对齐
+            el.style.transition = 'all 0.8s ease-out';
+            el.style.left = `${newX}px`;
+            el.style.top = `${newY}px`;
+            el.style.transform = 'translate(-50%, -50%)'; // 保持居中对齐
+        };
+    });
+    
+    // 在心跳动画结束后开始围绕中心旋转（时间稍微调整以匹配新的动画）
+    setTimeout(() => {
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        const duration = 20000; // 20秒一圈
+        
+        // 保持气泡在原有位置，只添加3D旋转效果
+        toScatter.forEach((bubble, index) => {
+            // 获取气泡当前位置
+            const rect = bubble.getBoundingClientRect();
+            const bubbleX = rect.left + rect.width / 2;
+            const bubbleY = rect.top + rect.height / 2;
+            
+            // 计算相对于中心的角度
+            const deltaX = bubbleX - centerX;
+            const deltaY = bubbleY - centerY;
+            let initialAngle = Math.atan2(deltaY, deltaX);
+            
+            // 确保角度在0到2π范围内
+            if (initialAngle < 0) initialAngle += 2 * Math.PI;
+            
+            // 保存初始信息
+            bubble.dataset.initialAngle = initialAngle;
+            bubble.dataset.centerX = centerX;
+            bubble.dataset.centerY = centerY;
+            bubble.dataset.initialX = bubbleX;
+            bubble.dataset.initialY = bubbleY;
+            
+            // 设置3D样式
+            bubble.style.transformStyle = 'preserve-3d';
         });
         
-        // 等待散布完成后，开始围绕爱心旋转
-        setTimeout(() => {
-            const centerX = window.innerWidth / 2;
-            const centerY = window.innerHeight / 2;
-            const duration = 20000; // 20秒一圈
+        // 创建统一的旋转动画
+        let currentRotation = 0;
+        const rotationInterval = setInterval(() => {
+            currentRotation += (2 * Math.PI) / (duration / 16); // 每帧增加的角度
             
-            // 保持气泡在原有位置，只添加3D旋转效果
-            toScatter.forEach((bubble, index) => {
-                // 获取气泡当前位置
-                const rect = bubble.getBoundingClientRect();
-                const bubbleX = rect.left + rect.width / 2;
-                const bubbleY = rect.top + rect.height / 2;
+            // 更新所有气泡的位置
+            toScatter.forEach(bubble => {
+                const initialAngle = parseFloat(bubble.dataset.initialAngle);
+                const centerX = parseFloat(bubble.dataset.centerX);
+                const centerY = parseFloat(bubble.dataset.centerY);
+                const initialX = parseFloat(bubble.dataset.initialX);
+                const initialY = parseFloat(bubble.dataset.initialY);
                 
-                // 计算相对于中心的角度
-                const deltaX = bubbleX - centerX;
-                const deltaY = bubbleY - centerY;
-                let initialAngle = Math.atan2(deltaY, deltaX);
+                // 计算新角度（围绕Z轴旋转）
+                const newAngle = initialAngle + currentRotation;
                 
-                // 确保角度在0到2π范围内
-                if (initialAngle < 0) initialAngle += 2 * Math.PI;
+                // 计算相对于中心的偏移
+                const offsetX = initialX - centerX;
+                const offsetY = initialY - centerY;
                 
-                // 保存初始信息
-                bubble.dataset.initialAngle = initialAngle;
-                bubble.dataset.centerX = centerX;
-                bubble.dataset.centerY = centerY;
-                bubble.dataset.initialX = bubbleX;
-                bubble.dataset.initialY = bubbleY;
+                // 应用旋转变换
+                const cos = Math.cos(currentRotation);
+                const sin = Math.sin(currentRotation);
                 
-                // 设置3D样式
-                bubble.style.transformStyle = 'preserve-3d';
+                const newX = offsetX * cos - offsetY * sin;
+                const newY = offsetX * sin + offsetY * cos;
+                
+                // 应用变换，保持文字朝向屏幕
+                bubble.style.transform = `translate(calc(-50% + ${newX}px), calc(-50% + ${newY}px))`;
             });
-            
-            // 创建统一的旋转动画
-            let currentRotation = 0;
-            const rotationInterval = setInterval(() => {
-                currentRotation += (2 * Math.PI) / (duration / 16); // 每帧增加的角度
-                
-                // 更新所有气泡的位置
-                toScatter.forEach(bubble => {
-                    const initialAngle = parseFloat(bubble.dataset.initialAngle);
-                    const centerX = parseFloat(bubble.dataset.centerX);
-                    const centerY = parseFloat(bubble.dataset.centerY);
-                    const initialX = parseFloat(bubble.dataset.initialX);
-                    const initialY = parseFloat(bubble.dataset.initialY);
-                    
-                    // 计算新角度（围绕Z轴旋转）
-                    const newAngle = initialAngle + currentRotation;
-                    
-                    // 计算相对于中心的偏移
-                    const offsetX = initialX - centerX;
-                    const offsetY = initialY - centerY;
-                    
-                    // 应用旋转变换
-                    const cos = Math.cos(currentRotation);
-                    const sin = Math.sin(currentRotation);
-                    
-                    const newX = offsetX * cos - offsetY * sin;
-                    const newY = offsetX * sin + offsetY * cos;
-                    
-                    // 应用变换，保持文字朝向屏幕
-                    bubble.style.transform = `translate(calc(-50% + ${newX}px), calc(-50% + ${newY}px))`;
-                });
-            }, 16); // 约60fps
-            
-        }, 800); // 等待散布动画完成
+        }, 16); // 约60fps
         
-        // 中心爱心也持续跳动
-        const heartBeatInterval = setInterval(() => {
-            const beatAnimation = canvas.animate([
-                { transform: 'translate(-50%, -50%) scale(1)', offset: 0 },
-                { transform: 'translate(-50%, -50%) scale(1.12)', offset: 0.5 },
-                { transform: 'translate(-50%, -50%) scale(1)', offset: 1 }
-            ], { duration: 800, easing: 'ease-in-out' });
-            
-            // 清理动画资源
-            beatAnimation.onfinish = () => {
-                beatAnimation.cancel();
-            };
-        }, 1600); // 每1.6秒跳动一次
-        
-    }, heartbeatDuration * 2);
+    }, heartbeatDuration + 800); // 等待心跳动画和散布动画完成
 }
 
 // 背景心和玫瑰弹出动画
@@ -399,7 +333,12 @@ function createBgEmoji() {
 }
 
 function startBackgroundEmojis() {
-    setInterval(() => { createBgEmoji(); }, 350);
+    // 增加背景爱心和玫瑰的出现频率，从350ms减少到100ms
+    setInterval(() => { 
+        // 每次创建2个背景emoji以增加数量
+        createBgEmoji();
+        createBgEmoji();
+    }, 100);
 }
 
 // 计算心形参数点（经典参数心形）
